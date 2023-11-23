@@ -1,0 +1,96 @@
+### this is a walk-through for how to use BigQuery and local scripts to
+### do an analysis around an IXP (or other?) outage around the
+### "Does the Internet route around damage?" theme
+
+## Copied from LINX event ( work/event-linx-atlas-trace )
+# and adapted to AMS-IX outage on 2023-11-22
+
+#### step1 ( GCP web UI )
+# query to select pairs of prb_id/dst_addr (NOT msm_id!) that went through
+# AMS-IX on "training day" , ie. the day before
+
+===
+with filtered_data as (
+    select t.*
+    from `ripencc-atlas`.measurements.traceroute t, UNNEST(hops) AS hop
+    where start_time >= "2023-11-21" and start_time < "2023-11-22"
+    and af = 4
+    and NET.IP_TRUNC(hop.hop_addr_bytes, 21) = NET.IP_FROM_STRING("80.249.208.0")
+),
+unq_traces as (
+SELECT ANY_VALUE( filtered_data).*
+FROM   filtered_data
+GROUP BY TO_JSON_STRING(filtered_data)
+)
+
+SELECT prb_id, dst_addr, count(*) as count
+FROM unq_traces
+GROUP BY prb_id, dst_addr
+===
+
+# Save this to a temp-table in the bq webUI
+# in this case
+- project: prod-atlas-project
+- dataset: temp_tables ( so it auto-deletes after 7 days)
+- table: ams-ix-train-pairs-v4
+
+( 146,925 pairs )
+
+### step2 ( GCP web UI )
+# query: for all pairs that we see on training day extract full traceroutes
+# for those pairs where we see >48 hits (ie. it sees the lan at least every 30 mins)
+# DO this for training day AND 'event day' 
+#### NOTE: do this in the webUI by clicking through to the pairs table and then go to the 'query' button. If I just queried from another tab I ran into permission issues (!?)
+===
+select t.*
+from `ripencc-atlas`.measurements.traceroute t, `prod-atlas-project.temp_tables.ams-ix-train-pairs-v4` as pairs
+where start_time >= "2023-11-21" and start_time < "2023-11-24"
+and af = 4 and t.prb_id=pairs.prb_id and t.dst_addr=pairs.dst_addr and pairs.count >= 48
+order by t.prb_id, t.msm_id, t.start_time
+===
+
+# Save this to a temp-table in the bq webUI
+# in this case
+- project: prod-atlas-project
+- dataset: temp_tables
+- table: ams-ix-freqpair-traces
+
+# Then navigate to this new temp table (you can't do this directly! causing extra query cost on the platform .... grrr) and in the webUI go to 'export' -> 'export to gcs'
+
+created a json (newline delimited) export, with GZIP
+
+# I created a new bucket: 'eaben-amsix-traces' with the following settings:
+- I selected 'region: eu' 
+- access control: I unchecked 'enforce public access prevention on this bucket'
+and kept the rest of bucket settings default
+
+# then created a filename: "eaben-amsix-traces-*.gz"
+
+### step3 ( local compute, in my case: my laptop )
+
+# download the data
+mkdir ./data
+cd ./data
+gsutil cp -r gs://eaben-amsix-traces .
+
+# this creates an eaben-amsix-traces subdir ...
+
+# note that various gsutil cp command options didn't work for me, for instance:
+# gsutil cp "gs://eaben-amsix-traces/eaben-amsix-traces-*.gz" ./data
+# DOES NOT WORK
+
+( 1.9G of compressed traceroutes )
+
+### step4 (local scripts)
+# 'remix' creates a single file per src/dst pair to easy analysis
+
+mkdir ./pairs
+./remix.py
+
+# note: this step takes hours!
+# TODO: Agustin: I think there is a reshuffle happening in min_rtt that groups the external files into one-file-per-src/asn. If you can share how you did that, that would help this type of IXP analysis
+
+### step5 (local scripts)
+## processing of traces
+./process-pairs.py > suitability.pairs.txt
+./pairs-via-ixps.py > infras.pairs.txt
