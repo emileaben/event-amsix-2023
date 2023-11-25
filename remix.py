@@ -3,6 +3,7 @@ import json
 import sys
 import gzip
 import glob
+from collections import Counter
 
 in_files = glob.glob("./data/*/*.gz")
 
@@ -10,6 +11,7 @@ in_files = glob.glob("./data/*/*.gz")
 
 fd = None
 pair = None
+c = Counter()
 for fname in in_files:
     with gzip.open(fname, 'r') as inf:
         print(f"processing {fname}")
@@ -17,6 +19,7 @@ for fname in in_files:
             #line = line.rstrip('\n')
             j = json.loads( line )
             this_pair = ( j['prb_id'], j['dst_addr'] )
+            c[ this_pair ] += 1
             if pair != this_pair:
                 #print( this_pair )
                 # Counter here?
@@ -30,3 +33,8 @@ for fname in in_files:
             pair = this_pair
 print("\n", file=fd )
 fd.close()
+
+# counter is quality control
+print( "writing a counter for quality control to ./data/.check.remix " )
+with open("./data/.check.remix", 'wt' ) as outf:
+    json.dump( c.most_common() , outf, indent=2 )

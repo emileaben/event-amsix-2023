@@ -5,8 +5,10 @@ import arrow
 
 import radix
 
+### add the peering LANs here
 r = radix.Radix()
-r.add("195.66.224.0/22")
+r.add("80.249.208.0/21")
+r.add("2001:7f8:1::/64")
 
 files = glob.glob("./pairs/*.jsonf")
 
