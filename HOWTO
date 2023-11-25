@@ -11,11 +11,10 @@
 
 ===
 with filtered_data as (
-    select t.*
-    from `ripencc-atlas`.measurements.traceroute t, UNNEST(hops) AS hop
-    where start_time >= "2023-11-21" and start_time < "2023-11-22"
-    and af = 4
-    and NET.IP_TRUNC(hop.hop_addr_bytes, 21) = NET.IP_FROM_STRING("80.249.208.0")
+ select t.*
+ from `ripencc-atlas`.measurements.traceroute t, UNNEST(hops) AS hop
+ where start_time >= "2023-11-21" and start_time < "2023-11-22"
+ and ( ( af = 4 and NET.IP_TRUNC(hop.hop_addr_bytes, 21) = NET.IP_FROM_STRING("80.249.208.0") ) or ( af =6 and hop.hop_addr LIKE "2001:7f8:1:%") )
 ),
 unq_traces as (
 SELECT ANY_VALUE( filtered_data).*
@@ -32,9 +31,9 @@ GROUP BY prb_id, dst_addr
 # in this case
 - project: prod-atlas-project
 - dataset: temp_tables ( so it auto-deletes after 7 days)
-- table: ams-ix-train-pairs-v4
+- table: ams-ix-train-pairs
 
-( 146,925 pairs )
+( 337,601 pairs. The IPv4 query earlier had 146,925 pairs )
 
 ### step2 ( GCP web UI )
 # query: for all pairs that we see on training day extract full traceroutes
@@ -43,7 +42,7 @@ GROUP BY prb_id, dst_addr
 #### NOTE: do this in the webUI by clicking through to the pairs table and then go to the 'query' button. If I just queried from another tab I ran into permission issues (!?)
 ===
 select t.*
-from `ripencc-atlas`.measurements.traceroute t, `prod-atlas-project.temp_tables.ams-ix-train-pairs-v4` as pairs
+from `ripencc-atlas`.measurements.traceroute t, `prod-atlas-project.temp_tables.ams-ix-train-pairs` as pairs
 where start_time >= "2023-11-21" and start_time < "2023-11-24"
 and af = 4 and t.prb_id=pairs.prb_id and t.dst_addr=pairs.dst_addr and pairs.count >= 48
 order by t.prb_id, t.msm_id, t.start_time
@@ -53,27 +52,28 @@ order by t.prb_id, t.msm_id, t.start_time
 # in this case
 - project: prod-atlas-project
 - dataset: temp_tables
-- table: ams-ix-freqpair-traces
+- table: ams-ix-outage-traces1
 
 # Then navigate to this new temp table (you can't do this directly! causing extra query cost on the platform .... grrr) and in the webUI go to 'export' -> 'export to gcs'
 
 created a json (newline delimited) export, with GZIP
 
-# I created a new bucket: 'eaben-amsix-traces' with the following settings:
+# I created a new bucket: 'eaben-amsix-traces1' with the following settings:
 - I selected 'region: eu' 
 - access control: I unchecked 'enforce public access prevention on this bucket'
 and kept the rest of bucket settings default
 
-# then created a filename: "eaben-amsix-traces-*.gz"
+# then created a filename: "eaben-amsix-traces1-*.gz"
+# gs://eaben-amsix-traces1/eaben-amsix-traces1-*.gz
 
 ### step3 ( local compute, in my case: my laptop )
 
 # download the data
 mkdir ./data
 cd ./data
-gsutil cp -r gs://eaben-amsix-traces .
+gsutil cp -r gs://eaben-amsix-traces1 .
 
-# this creates an eaben-amsix-traces subdir ...
+# this creates an eaben-amsix-traces1 subdir ...
 
 # note that various gsutil cp command options didn't work for me, for instance:
 # gsutil cp "gs://eaben-amsix-traces/eaben-amsix-traces-*.gz" ./data
@@ -85,12 +85,35 @@ gsutil cp -r gs://eaben-amsix-traces .
 # 'remix' creates a single file per src/dst pair to easy analysis
 
 mkdir ./pairs
-./remix.py
+time ./remix.py
 
-# note: this step takes hours!
+# note: this step takes a lot of time. Example: 2:10:09.66 (> 2hrs!)
 # TODO: Agustin: I think there is a reshuffle happening in min_rtt that groups the external files into one-file-per-src/asn. If you can share how you did that, that would help this type of IXP analysis
 
 ### step5 (local scripts)
-## processing of traces
-./process-pairs.py > suitability.pairs.txt
-./pairs-via-ixps.py > infras.pairs.txt
+## processing of traces into a smaller signal
+# TODO: add/change the peering LANs to the top of the 'process-pairs.py' script
+time ./process-pairs.py > suitability.pairs.txt
+time ./pairs-via-ixps.py > infras.pairs.txt
+
+# process-pairs: 49:05.94
+# pairs-via-ixps: 51:58.35
+
+
+### step6 (local script)
+### calculate the pairs that are 'reliable' on test day:
+## FIRST: add/change the date of the 'test' period (ie. the first day, in this case 2023-11-22T00:00:00Z)
+./suitable-pairs.py > reliability.pairs.test.txt
+
+## step7 (local scripts, plotting)
+## binning of error rates:
+### TODO: edit the plot-failrate gnuplot script
+./bin-failrates.py | tee failrate.counts.txt
+gnuplot < plot-failrate.gnuplot
+
+## step8 (local scripts, plotting)
+## which other infra was seen?
+### after running the first command, you see the list of peering LANs in the header of the infra.counts.txt
+## TODO: edit the plot script . Esp the labels for the various parts
+./bin-infras.py > infra.counts.txt
+gnuplot < plot-other.gnuplot
