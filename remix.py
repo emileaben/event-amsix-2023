@@ -5,16 +5,18 @@ import gzip
 import glob
 from collections import Counter
 
-in_files = glob.glob("./data/*/*.gz")
+in_files = sorted( glob.glob("./data/*/*.gz") )
 
 ### TODO counters so we can see if we don't lose data in this step!
 
 fd = None
 pair = None
 c = Counter()
+fcount = 0
 for fname in in_files:
     with gzip.open(fname, 'r') as inf:
-        print(f"processing {fname}")
+        fcount += 1
+        print(f"processing {fname} ({fcount}/{len(in_files)})")
         for line in inf:
             #line = line.rstrip('\n')
             j = json.loads( line )

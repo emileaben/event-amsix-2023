@@ -5,7 +5,7 @@ from collections import Counter
 #ix_counts = Counter()
 
 ### cut-off for errors in traceroute timestamps
-end_ts = 1700740800
+#end_ts = 1700740800
 
 series = {} # keyed by timestamps at BIN size interval
 BIN = 15*60
@@ -28,6 +28,8 @@ with open("reliability.pairs.test.txt",'rt') as inf:
             pair = ( fields[0], fields[1] )
             rpairs.add( pair )
 
+print(f"pairs loaded: { len( rpairs ) }", file=sys.stderr)
+
 
 '''
 6527 194.81.236.229 1616372035 True True
@@ -36,6 +38,8 @@ with open("reliability.pairs.test.txt",'rt') as inf:
 6527 194.81.236.229 1616374732 True True
 '''
 
+ycnt=0 #yes cnt
+icnt=0 #ignore cnt
 with open("suitability.pairs.txt", 'rt') as inf:
     for line in inf:
         line = line.rstrip('\n')
@@ -44,6 +48,8 @@ with open("suitability.pairs.txt", 'rt') as inf:
         dst_addr = fields[1]
         if not (prb_id,dst_addr) in rpairs:
             continue
+            icnt += 1
+        ycnt += 1
         ans = "|".join( [fields[3], fields[4]] ) # True|True  True|False False|True False|False 
         ts = int( fields[2] )
         ts_bin = ts - ( ts % BIN )
@@ -53,6 +59,8 @@ with open("suitability.pairs.txt", 'rt') as inf:
 
 tsbin_min = min( series.keys() )
 tsbin_max = max( series.keys() )
+
+print(f"ignored: {icnt}, not ignored {ycnt}, ts_min: {tsbin_min}, ts_max: {tsbin_max}", file=sys.stderr)
 
 #infras_ordered = list( map( lambda x: x[0], ix_counts.most_common() ) )
 
@@ -68,6 +76,6 @@ while tsnow <= tsbin_max:
             if  ttype in series[ tsnow ]:
                 cnt = series[ tsnow ][ ttype ]
         counts.append( str( cnt ) )
-    if tsnow < end_ts:
-        print( tsnow, " ".join( counts ) )
+    #if end_ts and tsnow < end_ts:
+    print( tsnow, " ".join( counts ) )
     tsnow += BIN

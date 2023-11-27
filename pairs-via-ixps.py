@@ -12,8 +12,19 @@ def get_ixp_info():
     ix = radix.Radix()
     r_ixpfx = requests.get("https://www.peeringdb.com/api/ixpfx")
     j_ixpfx = r_ixpfx.json()
-    for ixpfx in j_ixpfx['data']:
-        node = ix.add( ixpfx['prefix'] )
+    cnt = 0
+    try:
+        for ixpfx in j_ixpfx['data']:
+            node = ix.add( ixpfx['prefix'] )
+            cnt += 1
+    except:
+        print(f"problem with request { j_ixpfx }")
+        exit
+    # to make sure we load ixps
+    print(f"IXP cnt: { cnt }", file=sys.stderr )
+    if cnt == 0:
+        print("NO IXPs loaded, is peeringDB throttled (did you run this script twice within an hour?)")
+        exit
     return ix
 
 ix = get_ixp_info()
@@ -47,7 +58,7 @@ i=0
 flen = len( files )
 for fname in files:
     i += 1
-    print("processing fname %s (%s/%s)" % (fname,i,flen), file=sys.stderr )
+    print(f"({i}/{flen}) processing fname {fname}", file=sys.stderr )
     series = []
     prb_id = None
     dst_addr = None

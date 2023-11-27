@@ -40,11 +40,12 @@ GROUP BY prb_id, dst_addr
 # for those pairs where we see >48 hits (ie. it sees the lan at least every 30 mins)
 # DO this for training day AND 'event day' 
 #### NOTE: do this in the webUI by clicking through to the pairs table and then go to the 'query' button. If I just queried from another tab I ran into permission issues (!?)
+#### Things to think about: Do you want 'up until NOW' or cut-off at a certain date?
 ===
 select t.*
 from `ripencc-atlas`.measurements.traceroute t, `prod-atlas-project.temp_tables.ams-ix-train-pairs` as pairs
-where start_time >= "2023-11-21" and start_time < "2023-11-24"
-and af = 4 and t.prb_id=pairs.prb_id and t.dst_addr=pairs.dst_addr and pairs.count >= 48
+where start_time >= "2023-11-21" and start_time < "2023-11-25"
+and t.prb_id=pairs.prb_id and t.dst_addr=pairs.dst_addr and pairs.count >= 48
 order by t.prb_id, t.msm_id, t.start_time
 ===
 
@@ -56,7 +57,7 @@ order by t.prb_id, t.msm_id, t.start_time
 
 # Then navigate to this new temp table (you can't do this directly! causing extra query cost on the platform .... grrr) and in the webUI go to 'export' -> 'export to gcs'
 
-created a json (newline delimited) export, with GZIP
+For 'GCS location':
 
 # I created a new bucket: 'eaben-amsix-traces1' with the following settings:
 - I selected 'region: eu' 
@@ -66,12 +67,18 @@ and kept the rest of bucket settings default
 # then created a filename: "eaben-amsix-traces1-*.gz"
 # gs://eaben-amsix-traces1/eaben-amsix-traces1-*.gz
 
+
+# 1.5 TB queried in step2 -> results in 5.4 GB in gzip files in step3
+
+
+created a json (newline delimited) export, with GZIP
+
 ### step3 ( local compute, in my case: my laptop )
 
 # download the data
 mkdir ./data
 cd ./data
-gsutil cp -r gs://eaben-amsix-traces1 .
+gsutil -m cp -r gs://eaben-amsix-traces1 .
 
 # this creates an eaben-amsix-traces1 subdir ...
 
@@ -93,6 +100,7 @@ time ./remix.py
 ### step5 (local scripts)
 ## processing of traces into a smaller signal
 # TODO: add/change the peering LANs to the top of the 'process-pairs.py' script
+# TODO: better checks for pairs-via-ixps: You can't run the program twice within an hour (due to PeeringDB rate limits)
 time ./process-pairs.py > suitability.pairs.txt
 time ./pairs-via-ixps.py > infras.pairs.txt
 

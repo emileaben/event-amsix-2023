@@ -2,7 +2,7 @@
 import glob
 import ujson as json
 import arrow
-
+import sys
 import radix
 
 ### add the peering LANs here
@@ -11,7 +11,6 @@ r.add("80.249.208.0/21")
 r.add("2001:7f8:1::/64")
 
 files = glob.glob("./pairs/*.jsonf")
-
 
 def hits_infra( r, hops ):
     for h in hops:
@@ -28,12 +27,17 @@ def hits_dst( dst_addr, hops ):
                 return True
     return False
 
+all=len( files )
+cnt=0
+
 # read the files
 for fname in files:
+    cnt += 1
     series = []
     prb_id = None
     dst_addr = None
     with open(fname, 'rt') as inf:
+        print(f"processing {cnt} of {all} ( {fname} )", file=sys.stderr)
         for line in inf:
             line = line.rstrip('\n')
             if line == "":
