@@ -125,3 +125,10 @@ gnuplot < plot-failrate.gnuplot
 ## TODO: edit the plot script . Esp the labels for the various parts
 ./bin-infras.py > infra.counts.txt
 gnuplot < plot-other.gnuplot
+
+
+## step9 (quantify diversity of src-dst pairs)
+cat reliability.pairs.test.txt| perl -lane'print $F[0] if ($F[3]==1 && $F[4]==1)' | sort -n | uniq > prb_ids.txt
+cat reliability.pairs.test.txt| perl -lane'print $F[1] if ($F[3]==1 && $F[4]==1)' | sort -n | uniq > dst_addrs.txt
+
+
