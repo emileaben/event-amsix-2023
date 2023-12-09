@@ -130,5 +130,16 @@ gnuplot < plot-other.gnuplot
 ## step9 (quantify diversity of src-dst pairs)
 cat reliability.pairs.test.txt| perl -lane'print $F[0] if ($F[3]==1 && $F[4]==1)' | sort -n | uniq > prb_ids.txt
 cat reliability.pairs.test.txt| perl -lane'print $F[1] if ($F[3]==1 && $F[4]==1)' | sort -n | uniq > dst_addrs.txt
+cat reliability.pairs.test.txt| perl -lane'print "$F[0] $F[1]" if ($F[3]==1 && $F[4]==1)' | sort -n | uniq  > pairs.txt
 
+### bias
+curl "https://ftp.ripe.net/ripe/atlas/probes/archive/2023/11/20231121.json.bz2" > probes.json.bz2
+curl "https://rd-gcp-cdn.ripe.net/rd/min-rtt-by-net/2023/11/21/ix-26.json" > probes.minrtt.json
+
+whois -h riswhois.ripe.net dump > riswhois.dump4.txt
+whois -h riswhois.ripe.net dump6 > riswhois.dump6.txt
+curl https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v4-prefixes.txt > anycatch-v4-prefixes.txt
+curl https://raw.githubusercontent.com/bgptools/anycast-prefixes/master/anycatch-v6-prefixes.txt > anycatch-v6-prefixes.txt
+# this doesn't take into account routing changes between when this dump was done and the time period we look at. Should not matter that much.
+# at least not to get an indication
 
